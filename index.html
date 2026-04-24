@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Skill Visualiser</title>
+<link rel="stylesheet" href="styles.css" />
+<script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">◆</span>
+    <h1>Skill Visualiser</h1>
+    <span class="tagline">trigger routing & conflict map</span>
+  </div>
+  <div class="actions">
+    <label class="upload-btn">
+      <input type="file" id="upload" accept=".md" multiple hidden />
+      + Upload SKILL.md
+    </label>
+    <button id="reset-btn" class="ghost">Reset</button>
+  </div>
+</header>
+
+<main class="layout">
+  <aside class="sidebar left">
+    <div class="panel">
+      <h3>View</h3>
+      <div class="tabs">
+        <button class="tab active" data-view="graph">Network</button>
+        <button class="tab" data-view="cloud">Triggers</button>
+        <button class="tab" data-view="conflicts">Conflicts</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Edge types</h3>
+      <ul class="legend">
+        <li><span class="dot handoff"></span> handoff / loads / refers</li>
+        <li><span class="dot anti"></span> anti-route ("do NOT, use…")</li>
+        <li><span class="dot shared"></span> shared trigger</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>Filters</h3>
+      <label class="check"><input type="checkbox" id="f-handoff" checked /> handoffs</label>
+      <label class="check"><input type="checkbox" id="f-anti" checked /> anti-routes</label>
+      <label class="check"><input type="checkbox" id="f-shared" checked /> shared triggers</label>
+    </div>
+    <div class="panel skill-list">
+      <h3>Skills (<span id="count">0</span>)</h3>
+      <ul id="skills-ul"></ul>
+    </div>
+  </aside>
+
+  <section class="canvas">
+    <div id="view-graph" class="view active">
+      <svg id="graph"></svg>
+    </div>
+    <div id="view-cloud" class="view">
+      <div id="cloud" class="cloud"></div>
+    </div>
+    <div id="view-conflicts" class="view">
+      <div id="conflicts" class="conflicts"></div>
+    </div>
+  </section>
+
+  <aside class="sidebar right">
+    <div class="panel" id="detail">
+      <h3>Inspect</h3>
+      <p class="muted">Click a node, trigger, or conflict.</p>
+    </div>
+  </aside>
+</main>
+
+<script src="skills.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
