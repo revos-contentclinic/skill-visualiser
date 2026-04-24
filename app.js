@@ -195,7 +195,23 @@ function renderGraph() {
     .force("center", d3.forceCenter(width / 2, height / 2))
     .force("collide", d3.forceCollide(50));
 
-  const linkSel = svg.append("g")
+  // Zoomable root group — all graph contents go inside this
+  const root = svg.append("g").attr("class", "zoom-root");
+
+  const zoom = d3.zoom()
+    .scaleExtent([0.2, 5])
+    .filter(event => {
+      // Allow wheel zoom always; for drag-pan, ignore drags that start on a node
+      if (event.type === "wheel") return true;
+      return !event.target.closest(".node");
+    })
+    .on("zoom", e => root.attr("transform", e.transform));
+
+  svg.call(zoom).on("dblclick.zoom", () => {
+    svg.transition().duration(300).call(zoom.transform, d3.zoomIdentity);
+  });
+
+  const linkSel = root.append("g")
     .attr("stroke-width", 1.6)
     .selectAll("line")
     .data(filteredLinks)
@@ -206,7 +222,7 @@ function renderGraph() {
       inspectEdge(d, ctx);
     });
 
-  const nodeSel = svg.append("g")
+  const nodeSel = root.append("g")
     .selectAll("g")
     .data(nodes)
     .join("g")

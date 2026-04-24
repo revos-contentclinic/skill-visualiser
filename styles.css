@@ -118,7 +118,8 @@ button.ghost { background: transparent; }
 .canvas { position: relative; background: radial-gradient(ellipse at center, #14172a 0%, #0a0c14 70%); }
 .view { position: absolute; inset: 0; display: none; }
 .view.active { display: block; }
-#graph { width: 100%; height: 100%; }
+#graph { width: 100%; height: 100%; cursor: grab; }
+#graph:active { cursor: grabbing; }
 
 /* graph */
 .node circle { cursor: pointer; transition: stroke-width 0.15s; }
