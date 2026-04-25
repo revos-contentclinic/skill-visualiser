@@ -15,6 +15,7 @@
     <span class="tagline">trigger routing & conflict map</span>
   </div>
   <div class="actions">
+    <button id="guide-btn" class="ghost">? Guide</button>
     <label class="upload-btn">
       <input type="file" id="upload" accept=".md" multiple hidden />
       + Upload SKILL.md
@@ -22,6 +23,23 @@
     <button id="reset-btn" class="ghost">Reset</button>
   </div>
 </header>
+
+<div id="guide-modal" class="modal" hidden>
+  <div class="modal-card">
+    <header class="modal-header">
+      <h2>Skill writing guide</h2>
+      <button id="guide-close" class="ghost">✕</button>
+    </header>
+    <nav class="guide-nav">
+      <button class="guide-tab active" data-guide="edges">Edge types</button>
+      <button class="guide-tab" data-guide="anatomy">Skill anatomy</button>
+      <button class="guide-tab" data-guide="descriptions">Writing descriptions</button>
+      <button class="guide-tab" data-guide="triggers">Triggers</button>
+      <button class="guide-tab" data-guide="conflicts">Fixing conflicts</button>
+    </nav>
+    <section class="guide-body" id="guide-body"></section>
+  </div>
+</div>
 
 <main class="layout">
   <aside class="sidebar left">

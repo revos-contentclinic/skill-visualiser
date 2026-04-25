@@ -33,6 +33,7 @@ function parseSkillMarkdown(raw, filename = "uploaded.md") {
     filename,
     triggers,
     body,
+    raw, // full original markdown — used by the editor
     routes: [], // filled later when we know all skill names
   };
 }
@@ -349,6 +350,7 @@ function inspectSkill(s) {
       <div class="triggers">${handoffs.map(h => `<span class="pill" data-skill="${h.target}">→ ${h.target}</span>`).join("")}</div>` : ""}
     ${antis.length ? `<div class="row"><strong style="color:var(--anti)">Anti-routes</strong></div>
       <div class="triggers">${antis.map(h => `<span class="pill" data-skill="${h.target}">⊘ ${h.target}</span>`).join("")}</div>` : ""}
+    <button class="edit-btn" data-edit="${s.name}">✎ Edit this skill</button>
   `;
   detail.querySelectorAll("[data-skill]").forEach(el =>
     el.onclick = () => {
@@ -357,6 +359,104 @@ function inspectSkill(s) {
     });
   detail.querySelectorAll("[data-trigger]").forEach(el =>
     el.onclick = () => inspectTrigger(el.dataset.trigger));
+  detail.querySelector(".edit-btn").onclick = () => openEditor(s);
+}
+
+// ── Editor ───────────────────────────────────────────────────────────────────
+// Originals are NEVER touched. Edits live in browser memory, and on save we
+// write a copy to a user-chosen "Edited Skills" directory (File System Access
+// API in Chromium) — fallback is a download to the Downloads folder.
+
+let EDITED_DIR_HANDLE = null; // session-only
+
+function openEditor(s) {
+  const detail = document.getElementById("detail");
+  detail.innerHTML = `
+    <h3>Edit · ${s.name}</h3>
+    <div class="row" style="color:var(--muted)">Original is not touched. Save writes a copy to your <strong style="color:var(--text)">Edited Skills</strong> folder.</div>
+    <div class="editor">
+      <textarea id="editor-area" spellcheck="false">${escapeHtml(s.raw || "")}</textarea>
+      <div class="editor-actions">
+        <button class="primary" id="editor-save">Save copy</button>
+        <button id="editor-cancel">Cancel</button>
+      </div>
+    </div>
+  `;
+  document.getElementById("editor-cancel").onclick = () => inspectSkill(s);
+  document.getElementById("editor-save").onclick = () => saveEdit(s);
+}
+
+async function saveEdit(originalSkill) {
+  const newRaw = document.getElementById("editor-area").value;
+  const reparsed = parseSkillMarkdown(newRaw, originalSkill.filename || originalSkill.name + ".md");
+  if (!reparsed) {
+    toast("Couldn't parse — frontmatter missing or malformed.");
+    return;
+  }
+  reparsed.raw = newRaw;
+  // Replace in STATE by ORIGINAL name (in case user changed the name)
+  const idx = STATE.skills.findIndex(x => x.name === originalSkill.name);
+  if (idx === -1) STATE.skills.push(reparsed); else STATE.skills[idx] = reparsed;
+  // Recompute routes for ALL skills — names may have shifted
+  const names = STATE.skills.map(s => s.name);
+  STATE.skills.forEach(s => { s.routes = extractRoutes(s, names); });
+  // Trigger index
+  STATE.triggerIndex = {};
+  STATE.skills.forEach(s => s.triggers.forEach(t => (STATE.triggerIndex[t] ||= []).push(s.name)));
+
+  rebuildAll();
+
+  // Persist to disk
+  const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const filename = `${reparsed.name}-edited-${ts}.md`;
+  const saved = await persistEditedFile(filename, newRaw);
+  toast(saved.message);
+  inspectSkill(reparsed);
+}
+
+async function persistEditedFile(filename, contents) {
+  // Try File System Access API (Chromium)
+  if ("showDirectoryPicker" in window) {
+    try {
+      if (!EDITED_DIR_HANDLE) {
+        EDITED_DIR_HANDLE = await window.showDirectoryPicker({
+          id: "edited-skills",
+          mode: "readwrite",
+          startIn: "documents",
+        });
+      }
+      // Ensure folder is named-or-nested correctly: create/get "Edited Skills" subfolder
+      let dir = EDITED_DIR_HANDLE;
+      if (dir.name !== "Edited Skills") {
+        dir = await EDITED_DIR_HANDLE.getDirectoryHandle("Edited Skills", { create: true });
+      }
+      const fileHandle = await dir.getFileHandle(filename, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(contents);
+      await writable.close();
+      return { ok: true, message: `Saved to Edited Skills / ${filename}` };
+    } catch (err) {
+      // User cancelled or permission denied — fall back to download
+    }
+  }
+  // Fallback: trigger download
+  const blob = new Blob([contents], { type: "text/markdown" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(a.href);
+  return { ok: true, message: `Downloaded ${filename} — move into your Edited Skills folder.` };
+}
+
+function toast(msg) {
+  const t = document.createElement("div");
+  t.className = "toast";
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
 }
 
 function inspectTrigger(trigger) {
@@ -453,6 +553,158 @@ document.querySelectorAll(".tab").forEach(t =>
 window.addEventListener("resize", () => {
   if (document.getElementById("view-graph").classList.contains("active")) renderGraph();
 });
+
+// ── Guide modal ─────────────────────────────────────────────────────────────
+const GUIDE = {
+  edges: `
+    <h3>How edges in the Network view are derived</h3>
+    <p>Every edge is computed automatically by parsing each skill's frontmatter <code>description</code>. Edges fall into three categories:</p>
+
+    <div class="edge-block handoff">
+      <strong>Green — Handoff / loads / refers</strong>
+      Skill A names skill B in its description in a positive way: "load <code>belief-mechanics</code>", "hands off to <code>writing-frameworks</code>", "use <code>aliz-voice</code> for the draft".
+      <p><strong>What this means:</strong> the model is told to follow A → B in this situation. The chain is intentional.</p>
+      <p><strong>When it's a problem:</strong> chains that loop (A → B → A), references to skills that don't exist, or vague handoffs that don't say <em>when</em> to follow them.</p>
+    </div>
+
+    <div class="edge-block anti">
+      <strong>Red dashed — Anti-route ("do NOT use this — use that")</strong>
+      Skill A explicitly tells the model <em>not</em> to use it for some case, and points to skill B instead. Detected from phrases like "Do NOT use for X — use Y", "rather than", "those are roi-of-calm".
+      <p><strong>Why this is good:</strong> negative routing is the strongest disambiguation signal Claude has. The PDF guide calls this "negative triggers" and recommends them whenever two skills are adjacent.</p>
+      <p><strong>When it's a problem:</strong> two skills both anti-route at each other in conflicting ways → confusion. Or an anti-route to a skill that doesn't exist → broken reference.</p>
+    </div>
+
+    <div class="edge-block shared">
+      <strong>Amber dotted — Shared trigger</strong>
+      Two or more skills list the same exact phrase in their <code>Triggers:</code> list. The visualiser draws a dotted line between every pair that shares one.
+      <p><strong>Why this is bad:</strong> when the user types that phrase, Claude must pick one skill. With identical triggers it picks roughly at random — or worse, loads both. This is the most common cause of routing accidents.</p>
+      <p><strong>The fix:</strong> pick a single owner for each phrase. Tighten the loser's trigger with a qualifier ("market pressure <em>for clients</em>"), or remove it entirely and let the anti-route do the work.</p>
+    </div>
+
+    <div class="callout">
+      <strong>Inspector tip:</strong> click any node to see its triggers (amber pills = shared), handoffs (→), and anti-routes (⊘). Click a trigger to see who else owns it.
+    </div>
+  `,
+  anatomy: `
+    <h3>Progressive Disclosure — the 3-level architecture</h3>
+    <p>Every skill has three layers. Knowing which layer is doing the work is the difference between a skill that fires correctly and one that bloats context.</p>
+    <ul>
+      <li><strong>Level 1 — YAML frontmatter</strong> (always loaded). Routing layer. Tells Claude <em>whether</em> to load the rest.</li>
+      <li><strong>Level 2 — SKILL.md body</strong> (loaded only if Level 1 routes). Instruction layer. The actual recipe.</li>
+      <li><strong>Level 3 — linked files</strong> in <code>/references/</code>, <code>/assets/</code>. Discovery layer. Claude opens these only when needed.</li>
+    </ul>
+    <p>The visualiser only looks at Level 1, because that's where every routing decision is made.</p>
+
+    <h3>Required frontmatter fields</h3>
+    <ul>
+      <li><code>name</code> — kebab-case, no spaces, no "claude" or "anthropic"</li>
+      <li><code>description</code> — under 1024 chars, no XML tags, must say <em>what</em> the skill does AND <em>when</em> to use it</li>
+    </ul>
+
+    <h3>Recommended fields</h3>
+    <ul>
+      <li><code>metadata.version</code> — semantic version</li>
+      <li><code>metadata.category</code> — used by the visualiser for colouring</li>
+      <li><code>metadata.author</code></li>
+    </ul>
+  `,
+  descriptions: `
+    <h3>What makes a description good</h3>
+    <p>The description field is the most important sentence in the whole skill. It's the only thing Claude sees when deciding whether to route.</p>
+    <ul>
+      <li><strong>Dual-purpose</strong> — what the skill does + when to use it. Both, in the first sentence.</li>
+      <li><strong>Actionable specificity</strong> — "Generates developer handoff documentation from Figma files" beats "Helps with design".</li>
+      <li><strong>User-centric phrasing</strong> — write triggers in the words a human would actually say, not technical jargon.</li>
+      <li><strong>File types</strong> — if the skill handles ".csv" or ".pdf", say so explicitly.</li>
+      <li><strong>Negative routing</strong> — "Do NOT use for X — use <code>other-skill</code>" is a strong disambiguator.</li>
+    </ul>
+
+    <h3>Common description anti-patterns</h3>
+    <ul>
+      <li><strong>Vague</strong>: "Helps with projects", "Provides assistance"</li>
+      <li><strong>Implementation-focused</strong>: "Implements the Project entity model" — describes code, not a user task</li>
+      <li><strong>Over-verbose</strong>: dumping the whole instruction set into Level 1. Wastes tokens and dilutes the routing signal.</li>
+      <li><strong>Broad overlaps</strong>: "Documents" without saying which kind</li>
+    </ul>
+
+    <div class="callout">
+      <strong>Limit:</strong> 1024 characters total for the description. If you need more, push detail into the body or <code>/references/</code>.
+    </div>
+  `,
+  triggers: `
+    <h3>Writing triggers that actually fire</h3>
+    <p>Triggers are the phrases inside the description (or the body of a skill) that signal "this is when to load me". The model treats them as patterns to match against the user's words.</p>
+    <ul>
+      <li>Use the <em>verbs</em> and <em>nouns</em> a real user would say: "fix the bug", "design this offer", "write this for me".</li>
+      <li>Bake in domain context: "RevOS market pressure" beats "market pressure" if other skills also cover that phrase.</li>
+      <li>Include paraphrases. Don't rely on a single phrasing — give 4–8 variations.</li>
+    </ul>
+
+    <h3>Trigger anti-patterns (cause over- and under-triggering)</h3>
+    <ul>
+      <li><strong>Generic words</strong>: "data", "documents", "content" — match too much.</li>
+      <li><strong>Internal jargon only</strong>: phrases the team uses but the user doesn't.</li>
+      <li><strong>Identical triggers</strong> across skills — the visualiser shows these as amber edges and pills.</li>
+    </ul>
+
+    <h3>Test your triggers</h3>
+    <ul>
+      <li>Does the skill fire on the obvious task?</li>
+      <li>Does it fire on paraphrased versions of the same task?</li>
+      <li>Does it stay silent on unrelated topics?</li>
+    </ul>
+  `,
+  conflicts: `
+    <h3>Reading the Conflicts panel</h3>
+    <p>The Conflicts view shows two things the visualiser flagged automatically.</p>
+
+    <h3>Shared triggers</h3>
+    <p>The same phrase appears in 2+ skills' trigger lists. When a user types that phrase, Claude has no deterministic way to pick — it may pick either, or load both.</p>
+    <p><strong>Fix options:</strong></p>
+    <ul>
+      <li>Pick one owner. Remove the trigger from the others.</li>
+      <li>Add a qualifier so the phrase becomes unique ("market pressure" → "RevOS market pressure" vs "client market pressure").</li>
+      <li>Add an explicit anti-route in the loser's description so it pushes back when accidentally loaded.</li>
+    </ul>
+
+    <h3>Anti-routes</h3>
+    <p>These are <em>good</em> — they're the deliberate "do NOT use X — use Y" boundaries. The panel surfaces them so you can audit:</p>
+    <ul>
+      <li>Does the target skill exist? (broken targets = a name that doesn't match anything in the visualiser)</li>
+      <li>Are there pairs of skills that anti-route at <em>each other</em>? That's a sign of overlap that needs a clearer split.</li>
+      <li>Does every skill that <em>should</em> have an anti-route have one? Adjacent skills almost always need at least one.</li>
+    </ul>
+
+    <h3>Other things to look for in the Network view</h3>
+    <ul>
+      <li><strong>Orphan nodes</strong> — no edges in or out. Either it's truly standalone or its description is too vague to route.</li>
+      <li><strong>Hub nodes</strong> — many handoffs going through one skill. Usually fine for a "router" skill (e.g. <code>aliz-diagnostic</code>), suspicious for a tactical one.</li>
+      <li><strong>Loops</strong> — A → B → A. Not always wrong, but worth confirming.</li>
+    </ul>
+
+    <div class="callout">
+      <strong>Editing workflow:</strong> click a flagged skill → "✎ Edit this skill" → tweak the description → Save copy. The graph updates instantly. The original file is never touched — copies go to your <strong>Edited Skills</strong> folder (or Downloads as fallback).
+    </div>
+  `,
+};
+
+function renderGuide(tab) {
+  document.getElementById("guide-body").innerHTML = GUIDE[tab];
+  document.querySelectorAll(".guide-tab").forEach(b => b.classList.toggle("active", b.dataset.guide === tab));
+}
+
+document.getElementById("guide-btn").addEventListener("click", () => {
+  document.getElementById("guide-modal").hidden = false;
+  renderGuide("edges");
+});
+document.getElementById("guide-close").addEventListener("click", () => {
+  document.getElementById("guide-modal").hidden = true;
+});
+document.getElementById("guide-modal").addEventListener("click", e => {
+  if (e.target.id === "guide-modal") e.target.hidden = true;
+});
+document.querySelectorAll(".guide-tab").forEach(b =>
+  b.addEventListener("click", () => renderGuide(b.dataset.guide)));
 
 // boot
 ingest(window.SEED_SKILLS);
