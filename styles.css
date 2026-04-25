@@ -102,6 +102,10 @@ button.ghost { background: transparent; }
 .dot.handoff { background: var(--handoff); }
 .dot.anti { background: var(--anti); }
 .dot.shared { background: var(--shared); }
+.arrow { display: inline-block; width: 16px; font-weight: 700; font-size: 14px; text-align: center; }
+.arrow.handoff { color: var(--handoff); }
+.arrow.anti { color: var(--anti); }
+.legend-hint { color: var(--muted); font-size: 11px; margin: 8px 0 0; line-height: 1.45; }
 
 .check { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; cursor: pointer; }
 

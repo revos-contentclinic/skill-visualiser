@@ -196,6 +196,28 @@ function renderGraph() {
     .force("center", d3.forceCenter(width / 2, height / 2))
     .force("collide", d3.forceCollide(50));
 
+  // Arrowhead markers (one per edge type, colour-matched)
+  const defs = svg.append("defs");
+  const markerData = [
+    { id: "arrow-handoff", color: "var(--handoff)" },
+    { id: "arrow-anti",    color: "var(--anti)" },
+  ];
+  markerData.forEach(m => {
+    defs.append("marker")
+      .attr("id", m.id)
+      .attr("viewBox", "0 -5 10 10")
+      .attr("refX", 10)
+      .attr("refY", 0)
+      .attr("markerWidth", 7)
+      .attr("markerHeight", 7)
+      .attr("orient", "auto")
+      .append("path")
+      .attr("d", "M0,-5 L10,0 L0,5 Z")
+      .attr("fill", getComputedStyle(document.documentElement).getPropertyValue(
+        m.id === "arrow-handoff" ? "--handoff" : "--anti"
+      ).trim());
+  });
+
   // Zoomable root group — all graph contents go inside this
   const root = svg.append("g").attr("class", "zoom-root");
 
@@ -218,6 +240,9 @@ function renderGraph() {
     .data(filteredLinks)
     .join("line")
     .attr("class", d => `link ${d.type}`)
+    .attr("marker-end", d => d.type === "handoff" ? "url(#arrow-handoff)"
+                          : d.type === "anti"    ? "url(#arrow-anti)"
+                          : null)
     .on("mouseover", (e, d) => {
       const ctx = d.type === "shared" ? `Shared trigger: "${d.trigger}"` : d.context || "";
       inspectEdge(d, ctx);
@@ -248,10 +273,25 @@ function renderGraph() {
     .attr("dy", d => 28 + Math.min(10, d.triggers))
     .text(d => d.id);
 
+  const radiusOf = d => 14 + Math.min(10, d.triggers);
   sim.on("tick", () => {
     linkSel
-      .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
-      .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+      .attr("x1", d => d.source.x)
+      .attr("y1", d => d.source.y)
+      .attr("x2", d => {
+        const r = radiusOf(d.target) + 6; // pad so arrowhead sits just outside the node
+        const dx = d.target.x - d.source.x;
+        const dy = d.target.y - d.source.y;
+        const len = Math.hypot(dx, dy) || 1;
+        return d.target.x - (dx / len) * r;
+      })
+      .attr("y2", d => {
+        const r = radiusOf(d.target) + 6;
+        const dx = d.target.x - d.source.x;
+        const dy = d.target.y - d.source.y;
+        const len = Math.hypot(dx, dy) || 1;
+        return d.target.y - (dy / len) * r;
+      });
     nodeSel.attr("transform", d => `translate(${d.x},${d.y})`);
   });
 }
@@ -605,27 +645,32 @@ window.addEventListener("resize", () => {
 const GUIDE = {
   edges: `
     <h3>How edges in the Network view are derived</h3>
-    <p>Every edge is computed automatically by parsing each skill's frontmatter <code>description</code>. Edges fall into three categories:</p>
+    <p>Every edge is computed automatically by parsing each skill's frontmatter <code>description</code>. Edges fall into three categories — two of them are <strong>directional</strong> (arrowhead points to the target), one is mutual (no arrow).</p>
+
+    <div class="callout">
+      <strong>Arrow direction:</strong> tail starts at the <em>source skill</em> (the one whose description mentions another), head points to the <em>target skill</em> (the one being referenced). Read arrows as "<em>from here, go there</em>".
+    </div>
 
     <div class="edge-block handoff">
-      <strong>Green — Handoff / loads / refers</strong>
+      <strong>Green arrow → — Handoff / loads / refers</strong>
       Skill A names skill B in its description in a positive way: "load <code>belief-mechanics</code>", "hands off to <code>writing-frameworks</code>", "use <code>aliz-voice</code> for the draft".
-      <p><strong>What this means:</strong> the model is told to follow A → B in this situation. The chain is intentional.</p>
+      <p><strong>Read as:</strong> "A feeds into B" — when A runs, it expects the chain to continue at B.</p>
       <p><strong>When it's a problem:</strong> chains that loop (A → B → A), references to skills that don't exist, or vague handoffs that don't say <em>when</em> to follow them.</p>
     </div>
 
     <div class="edge-block anti">
-      <strong>Red dashed — Anti-route ("do NOT use this — use that")</strong>
+      <strong>Red dashed arrow ⇢ — Anti-route ("do NOT use this — use that")</strong>
       Skill A explicitly tells the model <em>not</em> to use it for some case, and points to skill B instead. Detected from phrases like "Do NOT use for X — use Y", "rather than", "those are roi-of-calm".
-      <p><strong>Why this is good:</strong> negative routing is the strongest disambiguation signal Claude has. The PDF guide calls this "negative triggers" and recommends them whenever two skills are adjacent.</p>
-      <p><strong>When it's a problem:</strong> two skills both anti-route at each other in conflicting ways → confusion. Or an anti-route to a skill that doesn't exist → broken reference.</p>
+      <p><strong>Read as:</strong> "A is pushing work away, sending it to B" — the arrow is a redirect sign.</p>
+      <p><strong>Why it's good:</strong> negative routing is the strongest disambiguation signal Claude has. Every adjacent pair of skills should have at least one.</p>
+      <p><strong>When it's a problem:</strong> two skills redirect <em>at each other</em> (A→B and B→A) with no clear winner, or the target skill doesn't exist.</p>
     </div>
 
     <div class="edge-block shared">
-      <strong>Amber dotted — Shared trigger</strong>
-      Two or more skills list the same exact phrase in their <code>Triggers:</code> list. The visualiser draws a dotted line between every pair that shares one.
-      <p><strong>Why this is bad:</strong> when the user types that phrase, Claude must pick one skill. With identical triggers it picks roughly at random — or worse, loads both. This is the most common cause of routing accidents.</p>
-      <p><strong>The fix:</strong> pick a single owner for each phrase. Tighten the loser's trigger with a qualifier ("market pressure <em>for clients</em>"), or remove it entirely and let the anti-route do the work.</p>
+      <strong>Amber dotted line — Shared trigger (no arrow, mutual)</strong>
+      Two or more skills list the same exact phrase in their <code>Triggers:</code> list. No arrow because neither skill is pointing at the other — they're both competing for the same phrase.
+      <p><strong>Why this is bad:</strong> when the user types that phrase, Claude picks one roughly at random, or loads both. This is the most common cause of routing accidents.</p>
+      <p><strong>The fix:</strong> pick one owner. Tighten the loser's trigger with a qualifier ("market pressure <em>for clients</em>"), or remove it entirely and let the anti-route do the work.</p>
     </div>
 
     <div class="callout">

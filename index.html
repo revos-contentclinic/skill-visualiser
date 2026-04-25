@@ -54,10 +54,11 @@
     <div class="panel">
       <h3>Edge types</h3>
       <ul class="legend">
-        <li><span class="dot handoff"></span> handoff / loads / refers</li>
-        <li><span class="dot anti"></span> anti-route ("do NOT, use…")</li>
-        <li><span class="dot shared"></span> shared trigger</li>
+        <li><span class="arrow handoff">→</span> A hands off / loads B</li>
+        <li><span class="arrow anti">⇢</span> A redirects to B (do NOT use A)</li>
+        <li><span class="dot shared"></span> shared trigger (mutual)</li>
       </ul>
+      <p class="legend-hint">Arrow tail = source skill · Arrow head = where the routing sends you.</p>
     </div>
     <div class="panel">
       <h3>Filters</h3>
