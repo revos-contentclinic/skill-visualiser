@@ -289,43 +289,117 @@ function renderConflicts() {
   }
 
   if (shared.length) {
-    const h = document.createElement("h3");
-    h.textContent = "Shared triggers (potential double routing)";
-    h.style.cssText = "color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; margin: 0 0 12px;";
-    root.appendChild(h);
+    root.appendChild(sectionHeader("Shared triggers (potential double routing)"));
     shared.forEach(([trigger, owners]) => {
-      const card = document.createElement("div");
-      card.className = "conflict-card";
-      card.innerHTML = `
-        <h4><span class="badge shared">shared</span> "${trigger}"</h4>
-        <p class="muted">Listed as a trigger by ${owners.length} skills. Pick one owner or qualify the phrasing.</p>
-        <div class="skills-row">${owners.map(n => skillChipHtml(n)).join("")}</div>
-      `;
-      root.appendChild(card);
+      root.appendChild(buildConflictCard({
+        kind: "shared",
+        title: `"${trigger}"`,
+        subtitle: `Listed as a trigger by ${owners.length} skills. Pick one owner or qualify the phrasing.`,
+        skills: owners,
+      }));
     });
   }
 
   if (antis.length) {
-    const h = document.createElement("h3");
-    h.textContent = "Anti-routes (do NOT use X — use Y)";
-    h.style.cssText = "color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; margin: 18px 0 12px;";
-    root.appendChild(h);
+    root.appendChild(sectionHeader("Anti-routes (do NOT use X — use Y)"));
     antis.forEach(a => {
-      const card = document.createElement("div");
-      card.className = "conflict-card";
-      card.innerHTML = `
-        <h4><span class="badge anti">anti-route</span> ${a.from} → ${a.to}</h4>
-        <p class="muted">"${escapeHtml(a.ctx)}"</p>
-      `;
-      root.appendChild(card);
+      root.appendChild(buildConflictCard({
+        kind: "anti",
+        title: `${a.from} → ${a.to}`,
+        subtitle: `"${a.ctx}"`,
+        skills: [a.from, a.to],
+      }));
     });
   }
+}
+
+function sectionHeader(text) {
+  const h = document.createElement("h3");
+  h.textContent = text;
+  h.style.cssText = "color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; margin: 18px 0 12px;";
+  return h;
+}
+
+function buildConflictCard({ kind, title, subtitle, skills }) {
+  const card = document.createElement("div");
+  card.className = "conflict-card";
+  card.innerHTML = `
+    <h4><span class="badge ${kind}">${kind === "shared" ? "shared" : "anti-route"}</span> ${escapeHtml(title)}</h4>
+    <p class="muted">${escapeHtml(subtitle)}</p>
+    <div class="skills-row">${skills.map(n => skillChipHtml(n)).join("")}</div>
+    <button class="details-toggle" type="button">▸ View descriptions</button>
+    <div class="details-body" hidden></div>
+  `;
+
+  // Skill chips → inspect on the right
+  card.querySelectorAll(".skill-chip[data-skill]").forEach(el => {
+    el.addEventListener("click", () => {
+      const s = STATE.skills.find(x => x.name === el.dataset.skill);
+      if (s) inspectSkill(s);
+    });
+  });
+
+  // Expand/collapse details
+  const toggle = card.querySelector(".details-toggle");
+  const body = card.querySelector(".details-body");
+  toggle.addEventListener("click", () => {
+    const open = !body.hidden;
+    if (open) {
+      body.hidden = true;
+      toggle.textContent = "▸ View descriptions";
+    } else {
+      body.innerHTML = renderDetailsBody(skills);
+      body.hidden = false;
+      toggle.textContent = "▾ Hide descriptions";
+      // Wire inspect/edit per skill block
+      body.querySelectorAll("[data-inspect]").forEach(b => b.addEventListener("click", () => {
+        const s = STATE.skills.find(x => x.name === b.dataset.inspect);
+        if (s) inspectSkill(s);
+      }));
+      body.querySelectorAll("[data-edit]").forEach(b => b.addEventListener("click", () => {
+        const s = STATE.skills.find(x => x.name === b.dataset.edit);
+        if (s) openEditor(s);
+      }));
+    }
+  });
+
+  return card;
+}
+
+function renderDetailsBody(skillNames) {
+  return skillNames
+    .map(name => {
+      const s = STATE.skills.find(x => x.name === name);
+      if (!s) return `<div class="detail-block missing">⚠ <strong>${escapeHtml(name)}</strong> — referenced but not loaded. Add the SKILL.md to fix this.</div>`;
+      const triggers = s.triggers
+        .map(t => {
+          const isShared = (STATE.triggerIndex[t] || []).length > 1;
+          return `<span class="pill${isShared ? " shared" : ""}">${escapeHtml(t)}</span>`;
+        })
+        .join("");
+      return `
+        <div class="detail-block">
+          <div class="detail-head">
+            <span class="swatch" style="background:${colorFor(s.category)}"></span>
+            <strong>${escapeHtml(s.name)}</strong>
+            <span class="muted">v${escapeHtml(s.version || "?")} · ${escapeHtml(s.category)}</span>
+            <span class="spacer"></span>
+            <button class="mini" data-inspect="${escapeAttr(s.name)}">Inspect</button>
+            <button class="mini primary" data-edit="${escapeAttr(s.name)}">✎ Edit</button>
+          </div>
+          <p class="detail-desc">${escapeHtml(s.description)}</p>
+          ${triggers ? `<div class="triggers">${triggers}</div>` : ""}
+        </div>
+      `;
+    })
+    .join("");
 }
 
 function skillChipHtml(name) {
   const s = STATE.skills.find(x => x.name === name);
   const c = s ? colorFor(s.category) : "#94a3b8";
-  return `<span class="skill-chip" data-skill="${name}"><span class="swatch" style="background:${c}"></span>${name}</span>`;
+  const missing = s ? "" : " missing";
+  return `<span class="skill-chip${missing}" data-skill="${escapeAttr(name)}"><span class="swatch" style="background:${c}"></span>${escapeHtml(name)}${s ? "" : " ⚠"}</span>`;
 }
 
 // ── Inspect panel ────────────────────────────────────────────────────────────
