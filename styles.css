@@ -173,6 +173,7 @@ button.ghost { background: transparent; }
 }
 .details-toggle:hover { color: #aac8ff; }
 .details-body { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+.details-body[hidden] { display: none; }
 .detail-block {
   background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
   padding: 10px 12px;
