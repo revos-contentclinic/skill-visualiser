@@ -437,30 +437,32 @@ function inspectSkill(s) {
 }
 
 // ── Editor ───────────────────────────────────────────────────────────────────
-// Originals are NEVER touched. Edits live in browser memory, and on save we
-// write a copy to a user-chosen "Edited Skills" directory (File System Access
-// API in Chromium) — fallback is a download to the Downloads folder.
-
-let EDITED_DIR_HANDLE = null; // session-only
+// Live preview only. Edits stay in browser memory and update the visualisation
+// on Apply. Nothing is written to disk — the user copies the description back
+// into the original SKILL.md themselves and re-uploads to Claude.
 
 function openEditor(s) {
   const detail = document.getElementById("detail");
   detail.innerHTML = `
-    <h3>Edit · ${s.name}</h3>
-    <div class="row" style="color:var(--muted)">Original is not touched. Save writes a copy to your <strong style="color:var(--text)">Edited Skills</strong> folder.</div>
+    <h3>Edit · ${escapeHtml(s.name)}</h3>
+    <div class="editor-note">
+      You can edit the description here temporarily to see the new connections.
+      Once you're satisfied, <strong>copy this description</strong> and replace the original one you have.
+      Remember to upload to Claude again.
+    </div>
     <div class="editor">
       <textarea id="editor-area" spellcheck="false">${escapeHtml(s.raw || "")}</textarea>
       <div class="editor-actions">
-        <button class="primary" id="editor-save">Save copy</button>
+        <button class="primary" id="editor-apply">Apply changes</button>
         <button id="editor-cancel">Cancel</button>
       </div>
     </div>
   `;
   document.getElementById("editor-cancel").onclick = () => inspectSkill(s);
-  document.getElementById("editor-save").onclick = () => saveEdit(s);
+  document.getElementById("editor-apply").onclick = () => applyEdit(s);
 }
 
-async function saveEdit(originalSkill) {
+function applyEdit(originalSkill) {
   const newRaw = document.getElementById("editor-area").value;
   const reparsed = parseSkillMarkdown(newRaw, originalSkill.filename || originalSkill.name + ".md");
   if (!reparsed) {
@@ -468,7 +470,7 @@ async function saveEdit(originalSkill) {
     return;
   }
   reparsed.raw = newRaw;
-  // Replace in STATE by ORIGINAL name (in case user changed the name)
+  // Replace in STATE by ORIGINAL name (in case the name was changed in the edit)
   const idx = STATE.skills.findIndex(x => x.name === originalSkill.name);
   if (idx === -1) STATE.skills.push(reparsed); else STATE.skills[idx] = reparsed;
   // Recompute routes for ALL skills — names may have shifted
@@ -479,50 +481,8 @@ async function saveEdit(originalSkill) {
   STATE.skills.forEach(s => s.triggers.forEach(t => (STATE.triggerIndex[t] ||= []).push(s.name)));
 
   rebuildAll();
-
-  // Persist to disk
-  const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-  const filename = `${reparsed.name}-edited-${ts}.md`;
-  const saved = await persistEditedFile(filename, newRaw);
-  toast(saved.message);
+  toast("Preview updated. Copy the description and replace it in your original SKILL.md.");
   inspectSkill(reparsed);
-}
-
-async function persistEditedFile(filename, contents) {
-  // Try File System Access API (Chromium)
-  if ("showDirectoryPicker" in window) {
-    try {
-      if (!EDITED_DIR_HANDLE) {
-        EDITED_DIR_HANDLE = await window.showDirectoryPicker({
-          id: "edited-skills",
-          mode: "readwrite",
-          startIn: "documents",
-        });
-      }
-      // Ensure folder is named-or-nested correctly: create/get "Edited Skills" subfolder
-      let dir = EDITED_DIR_HANDLE;
-      if (dir.name !== "Edited Skills") {
-        dir = await EDITED_DIR_HANDLE.getDirectoryHandle("Edited Skills", { create: true });
-      }
-      const fileHandle = await dir.getFileHandle(filename, { create: true });
-      const writable = await fileHandle.createWritable();
-      await writable.write(contents);
-      await writable.close();
-      return { ok: true, message: `Saved to Edited Skills / ${filename}` };
-    } catch (err) {
-      // User cancelled or permission denied — fall back to download
-    }
-  }
-  // Fallback: trigger download
-  const blob = new Blob([contents], { type: "text/markdown" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(a.href);
-  return { ok: true, message: `Downloaded ${filename} — move into your Edited Skills folder.` };
 }
 
 function toast(msg) {
@@ -757,7 +717,7 @@ const GUIDE = {
     </ul>
 
     <div class="callout">
-      <strong>Editing workflow:</strong> click a flagged skill → "✎ Edit this skill" → tweak the description → Save copy. The graph updates instantly. The original file is never touched — copies go to your <strong>Edited Skills</strong> folder (or Downloads as fallback).
+      <strong>Editing workflow:</strong> click a flagged skill → "✎ Edit this skill" → tweak the description → Apply changes. The graph updates instantly so you can preview the new connections. Once you're happy, copy the description back into your original SKILL.md and re-upload it to Claude. The visualiser never writes to your files.
     </div>
   `,
 };

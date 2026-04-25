@@ -259,6 +259,14 @@ button.ghost { background: transparent; }
 }
 
 /* editor */
+.editor-note {
+  background: rgba(138, 180, 255, 0.08);
+  border: 1px solid rgba(138, 180, 255, 0.3);
+  color: #cbd5ff;
+  font-size: 12px; line-height: 1.55;
+  padding: 10px 12px; border-radius: 8px; margin-top: 10px;
+}
+.editor-note strong { color: var(--text); }
 .editor { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .editor textarea {
   width: 100%; min-height: 320px; max-height: 50vh;
