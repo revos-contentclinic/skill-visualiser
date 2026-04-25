@@ -122,8 +122,9 @@ button.ghost { background: transparent; }
 #graph:active { cursor: grabbing; }
 
 /* graph */
-.node circle { cursor: pointer; transition: stroke-width 0.15s; }
+.node circle { cursor: pointer; transition: stroke-width 0.15s, stroke 0.15s; }
 .node:hover circle { stroke-width: 3; }
+.node.pinned circle { stroke: var(--accent); stroke-width: 3; stroke-dasharray: 2 2; }
 .node text { fill: var(--text); font-size: 11px; pointer-events: none; text-anchor: middle; }
 .link { stroke-opacity: 0.55; transition: stroke-opacity 0.15s; }
 .link.handoff { stroke: var(--handoff); }

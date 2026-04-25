@@ -229,7 +229,14 @@ function renderGraph() {
     .join("g")
     .attr("class", "node")
     .call(drag(sim))
-    .on("click", (e, d) => inspectSkill(d.skill));
+    .on("click", (e, d) => inspectSkill(d.skill))
+    .on("dblclick", (e, d) => {
+      // Release a pinned node back to the simulation
+      d.fx = null; d.fy = null;
+      d3.select(e.currentTarget).classed("pinned", false);
+      sim.alpha(0.3).restart();
+      e.stopPropagation();
+    });
 
   nodeSel.append("circle")
     .attr("r", d => 14 + Math.min(10, d.triggers))
@@ -253,7 +260,13 @@ function drag(sim) {
   return d3.drag()
     .on("start", (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
     .on("drag", (e, d) => { d.fx = e.x; d.fy = e.y; })
-    .on("end", (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; });
+    .on("end", function (e, d) {
+      if (!e.active) sim.alphaTarget(0);
+      // Pin the node where the user dropped it — don't snap back.
+      // Double-click releases it.
+      d.fx = e.x; d.fy = e.y;
+      d3.select(this).classed("pinned", true);
+    });
 }
 
 // ── Trigger Cloud ────────────────────────────────────────────────────────────
