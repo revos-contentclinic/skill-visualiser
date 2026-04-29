@@ -3,94 +3,109 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Skill Visualiser</title>
+<title>10-Skill Ecosystem · Architecture Map</title>
 <link rel="stylesheet" href="styles.css" />
-<script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body>
 <header class="topbar">
   <div class="brand">
     <span class="logo">◆</span>
-    <h1>Skill Visualiser</h1>
-    <span class="tagline">trigger routing & conflict map</span>
+    <div>
+      <h1>10-Skill Ecosystem</h1>
+      <span class="tagline">architecture map · foundation locked 2026-04-29</span>
+    </div>
   </div>
   <div class="actions">
-    <button id="guide-btn" class="ghost">? Guide</button>
-    <label class="upload-btn">
-      <input type="file" id="upload" accept=".md" multiple hidden />
-      + Upload SKILL.md
-    </label>
-    <button id="reset-btn" class="ghost">Reset</button>
+    <button id="legend-btn" class="ghost">Legend</button>
+    <a class="ghost" href="https://github.com/revos-contentclinic/skill-visualiser" target="_blank" rel="noreferrer">GitHub</a>
   </div>
 </header>
-
-<div id="guide-modal" class="modal" hidden>
-  <div class="modal-card">
-    <header class="modal-header">
-      <h2>Skill writing guide</h2>
-      <button id="guide-close" class="ghost">✕</button>
-    </header>
-    <nav class="guide-nav">
-      <button class="guide-tab active" data-guide="edges">Edge types</button>
-      <button class="guide-tab" data-guide="anatomy">Skill anatomy</button>
-      <button class="guide-tab" data-guide="descriptions">Writing descriptions</button>
-      <button class="guide-tab" data-guide="triggers">Triggers</button>
-      <button class="guide-tab" data-guide="conflicts">Fixing conflicts</button>
-    </nav>
-    <section class="guide-body" id="guide-body"></section>
-  </div>
-</div>
 
 <main class="layout">
   <aside class="sidebar left">
     <div class="panel">
-      <h3>View</h3>
-      <div class="tabs">
-        <button class="tab active" data-view="graph">Network</button>
-        <button class="tab" data-view="cloud">Triggers</button>
-        <button class="tab" data-view="conflicts">Conflicts</button>
-      </div>
+      <h3>Flows</h3>
+      <div class="flows" id="flows"></div>
+      <p class="flow-desc" id="flow-desc"></p>
     </div>
     <div class="panel">
-      <h3>Edge types</h3>
-      <ul class="legend">
-        <li><span class="arrow handoff">→</span> A hands off / loads B</li>
-        <li><span class="arrow anti">⇢</span> A redirects to B (do NOT use A)</li>
-        <li><span class="dot shared"></span> shared trigger (mutual)</li>
-      </ul>
-      <p class="legend-hint">Arrow tail = source skill · Arrow head = where the routing sends you.</p>
+      <h3>Layers</h3>
+      <ul class="layer-list" id="layer-list"></ul>
     </div>
     <div class="panel">
-      <h3>Filters</h3>
-      <label class="check"><input type="checkbox" id="f-handoff" checked /> handoffs</label>
-      <label class="check"><input type="checkbox" id="f-anti" checked /> anti-routes</label>
-      <label class="check"><input type="checkbox" id="f-shared" checked /> shared triggers</label>
-    </div>
-    <div class="panel skill-list">
-      <h3>Skills (<span id="count">0</span>)</h3>
-      <ul id="skills-ul"></ul>
+      <h3>Skills (10)</h3>
+      <ul class="skill-list" id="skill-list"></ul>
     </div>
   </aside>
 
   <section class="canvas">
-    <div id="view-graph" class="view active">
-      <svg id="graph"></svg>
-    </div>
-    <div id="view-cloud" class="view">
-      <div id="cloud" class="cloud"></div>
-    </div>
-    <div id="view-conflicts" class="view">
-      <div id="conflicts" class="conflicts"></div>
-    </div>
+    <svg id="map" viewBox="0 0 1400 1100" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <marker id="arrow-handoff" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 Z" fill="#9ee0c0" />
+        </marker>
+        <marker id="arrow-filter" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 Z" fill="#c4b5fd" />
+        </marker>
+        <marker id="arrow-query" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 Z" fill="#93c5fd" />
+        </marker>
+        <marker id="arrow-trigger" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 Z" fill="#fdba74" />
+        </marker>
+        <marker id="arrow-state" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 Z" fill="#fcd34d" />
+        </marker>
+        <marker id="arrow-lookup" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 Z" fill="#5eead4" />
+        </marker>
+        <marker id="arrow-bedrock" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 Z" fill="#666" />
+        </marker>
+        <marker id="arrow-peer" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 Z" fill="#a87a4f" />
+        </marker>
+      </defs>
+      <g id="layer-bands"></g>
+      <g id="edges"></g>
+      <g id="nodes"></g>
+      <g id="edge-labels"></g>
+    </svg>
   </section>
 
   <aside class="sidebar right">
-    <div class="panel" id="detail">
-      <h3>Inspect</h3>
-      <p class="muted">Click a node, trigger, or conflict.</p>
+    <div class="panel" id="detail-panel">
+      <h3>Inspect a skill</h3>
+      <p class="muted">Hover or click a node to see its role, triggers, and connections. Click flow tabs at left to highlight a path.</p>
+    </div>
+    <div class="panel out-of-scope">
+      <h3>What's not on this map</h3>
+      <p class="muted">The deployment layer — <strong>rev-copy</strong> + 24 <strong>GAIA-marketing</strong> skills (ads, sales pages, lead magnets, CRO, paid ads, etc.) — sits outside the 10-skill ecosystem. Tactical marketing tools, manually invoked, separate from this foundation. Path B by design.</p>
     </div>
   </aside>
 </main>
+
+<div id="legend-modal" class="modal" hidden>
+  <div class="modal-card">
+    <header class="modal-header">
+      <h2>Edge legend</h2>
+      <button id="legend-close" class="ghost">✕</button>
+    </header>
+    <section class="legend-body">
+      <ul class="edge-legend">
+        <li><svg width="80" height="20"><line x1="5" y1="10" x2="75" y2="10" class="edge-bedrock" /></svg> <span><strong>Bedrock</strong> · silent / occasional, runs underneath</span></li>
+        <li><svg width="80" height="20"><line x1="5" y1="10" x2="75" y2="10" class="edge-filter" stroke-width="3" /></svg> <span><strong>Filter</strong> · always-on (ROC ethical)</span></li>
+        <li><svg width="80" height="20"><line x1="5" y1="10" x2="75" y2="10" class="edge-handoff" stroke-width="2.5" /></svg> <span><strong>Handoff</strong> · primary pipeline data flow</span></li>
+        <li><svg width="80" height="20"><line x1="5" y1="10" x2="75" y2="10" class="edge-query" /></svg> <span><strong>Query</strong> · skill or NLM lookup</span></li>
+        <li><svg width="80" height="20"><line x1="5" y1="10" x2="75" y2="10" class="edge-trigger" /></svg> <span><strong>Trigger</strong> · entry-point routing</span></li>
+        <li><svg width="80" height="20"><line x1="5" y1="10" x2="75" y2="10" class="edge-state" /></svg> <span><strong>State</strong> · NP read/write to project cache</span></li>
+        <li><svg width="80" height="20"><line x1="5" y1="10" x2="75" y2="10" class="edge-lookup" /></svg> <span><strong>Lookup</strong> · framework / catalogue reference</span></li>
+        <li><svg width="80" height="20"><line x1="5" y1="10" x2="75" y2="10" class="edge-peer" /></svg> <span><strong>Peer</strong> · parallel walker (no handoff)</span></li>
+      </ul>
+      <p class="legend-hint">Solid = direct flow · dashed = optional / on-demand · dotted = silent or peer</p>
+    </section>
+  </div>
+</div>
 
 <script src="skills.js"></script>
 <script src="app.js"></script>
