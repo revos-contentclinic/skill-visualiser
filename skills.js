@@ -77,12 +77,12 @@ window.SKILLS = [
   {
     id: "aliz-diagnostic",
     name: "aliz-diagnostic",
-    version: "1.7.1",
+    version: "1.8.0",
     layer: 6,
     layerLabel: "DIAGNOSTIC LAYER",
     layerSubtitle: "parallel walkers — audience and biz",
-    role: "AUDIENCE psychology clay-maker · 7-step walker + Step 4.5 HITL checkpoint",
-    description: "Pressure → Force State → Black Box Tactic → POV/Neutraliser → Benefits → Intent. Two paths: Short (juror profile pre-fills 1-5) / Full (client work, runs all 7 cold).",
+    role: "AUDIENCE psychology clay-maker · 6-step walker + Step 4.5 HITL checkpoint",
+    description: "Pressure → Force State → Black Box Tactic → POV/Neutraliser → Benefits. Two paths: Short (juror profile pre-fills 1-5) / Full (client work, runs all 6 cold).",
     triggers: ["diagnose time", "check black box", "ad to write", "diagnose this audience", "what's the angle here", "I'm consulting on X", "I need to write X"],
     fires: "front door for ALL writing/consulting; juror name routes here via wfts-juror-panel Short Path"
   },
